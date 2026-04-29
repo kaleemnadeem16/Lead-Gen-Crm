@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:16-bookworm
+    container_name: crm_postgres
+    environment:
+      POSTGRES_DB: crm_dev
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - crm_pg_data:/var/lib/postgresql/data
+    networks:
+      - crm_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_user -d crm_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-bookworm
+    container_name: crm_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - crm_redis_data:/data
+    networks:
+      - crm_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: crm_backend
+    volumes:
+      - ./backend:/var/www/html
+      - crm_backend_vendor:/var/www/html/vendor
+    ports:
+      - "8001:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - crm_network
+
+  horizon:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: crm_horizon
+    command: ["php", "artisan", "horizon"]
+    volumes:
+      - ./backend:/var/www/html
+      - crm_backend_vendor:/var/www/html/vendor
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - crm_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: crm_frontend
+    volumes:
+      - ./frontend:/app
+      - crm_frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    networks:
+      - crm_network
+
+volumes:
+  crm_pg_data:
+  crm_redis_data:
+  crm_backend_vendor:
+  crm_frontend_node_modules:
+
+networks:
+  crm_network:
+    driver: bridge

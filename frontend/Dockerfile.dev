@@ -1,0 +1,8 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+EXPOSE 5173
+
+# Install deps into the named volume on first start, then run dev server
+CMD sh -c "[ ! -f node_modules/.package-lock.json ] && npm install; npm run dev -- --host 0.0.0.0"

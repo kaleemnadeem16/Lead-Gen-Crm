@@ -1,0 +1,14 @@
+# Root env (never commit — contains DB_PASSWORD)
+.env
+
+# Local dev scripts (SSH tunnels, secrets — never commit)
+scripts/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
