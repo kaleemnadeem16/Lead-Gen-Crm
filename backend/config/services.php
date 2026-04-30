@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'n8n' => [
+        'webhook_url'    => env('N8N_WEBHOOK_BASE') . env('N8N_LEAD_GEN_TRIGGER_PATH', '/webhook/lead-gen-trigger'),
+        'webhook_secret' => env('N8N_CALLBACK_SECRET', ''),
+    ],
+
 ];
