@@ -25,8 +25,6 @@ services:
     image: crm_backend:latest
     container_name: crm_backend_prod
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     env_file:
       - ./backend/.env
     depends_on:
@@ -34,6 +32,21 @@ services:
         condition: service_healthy
     networks:
       - crm_network
+      - proxy-net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy-net
+      # HTTPS router
+      - traefik.http.routers.crm-backend.rule=Host(`api-crm.x1techs.com`)
+      - traefik.http.routers.crm-backend.entrypoints=websecure
+      - traefik.http.routers.crm-backend.tls=true
+      - traefik.http.routers.crm-backend.tls.certresolver=letsencrypt
+      # HTTP router -> redirect to HTTPS
+      - traefik.http.routers.crm-backend-http.rule=Host(`api-crm.x1techs.com`)
+      - traefik.http.routers.crm-backend-http.entrypoints=web
+      - traefik.http.routers.crm-backend-http.middlewares=crm-redirect-https
+      # Service port
+      - traefik.http.services.crm-backend.loadbalancer.server.port=8000
 
   # ── Horizon (queue worker) ────────────────────────────────────────────────────
   horizon:
@@ -73,10 +86,25 @@ services:
     image: crm_frontend:latest
     container_name: crm_frontend_prod
     restart: unless-stopped
-    ports:
-      - "3000:80"
     networks:
-      - crm_network
+      - proxy-net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy-net
+      # HTTPS router
+      - traefik.http.routers.crm-frontend.rule=Host(`crm.x1techs.com`)
+      - traefik.http.routers.crm-frontend.entrypoints=websecure
+      - traefik.http.routers.crm-frontend.tls=true
+      - traefik.http.routers.crm-frontend.tls.certresolver=letsencrypt
+      # HTTP router -> redirect to HTTPS
+      - traefik.http.routers.crm-frontend-http.rule=Host(`crm.x1techs.com`)
+      - traefik.http.routers.crm-frontend-http.entrypoints=web
+      - traefik.http.routers.crm-frontend-http.middlewares=crm-redirect-https
+      # Redirect middleware (defined once, reused by both services)
+      - traefik.http.middlewares.crm-redirect-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.crm-redirect-https.redirectscheme.permanent=true
+      # Service port
+      - traefik.http.services.crm-frontend.loadbalancer.server.port=80
 
 volumes:
   crm_redis_data:
@@ -84,3 +112,5 @@ volumes:
 networks:
   crm_network:
     driver: bridge
+  proxy-net:
+    external: true
