@@ -1,10 +1,14 @@
 name: CI / Deploy
 
+# ── Triggers ──────────────────────────────────────────────────────────────────
+# Tests run on every PR to main and on every push to main.
+# Deploy runs only after tests pass on a push to main (i.e. after PR merge).
+# Nothing runs on dev branch pushes — open a PR to main to trigger CI.
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 
 jobs:
   # ── Job 1: Backend tests ───────────────────────────────────────────────────
@@ -98,7 +102,9 @@ jobs:
       - name: Run Vitest
         run: npm run test -- --run
 
-  # ── Job 3: Deploy (push to main only, after both test jobs pass) ──────────
+  # ── Job 3: Deploy (push to main only, after both test jobs pass) ───────────
+  # The Docker images are built on the Oracle ARM VM (native ARM64).
+  # GitHub Actions only runs tests — no docker build happens here.
   deploy:
     name: Deploy to Oracle VM
     runs-on: ubuntu-latest
@@ -122,22 +128,42 @@ jobs:
             git checkout main
             git pull origin main
 
-            echo "── Building images (native ARM64) ──"
-            docker compose -f docker-compose.prod.yml build
+            echo "── Tagging current images as rollback ──"
+            docker tag crm_backend:latest crm_backend:rollback 2>/dev/null || true
+            docker tag crm_frontend:latest crm_frontend:rollback 2>/dev/null || true
 
-            echo "── Running migrations ──"
-            docker compose -f docker-compose.prod.yml run --rm backend \
-              php artisan migrate --force --no-interaction
+            echo "── Building images on ARM VM (native ARM64) ──"
+            if ! docker compose -f docker-compose.prod.yml build; then
+              echo "ERROR: Docker build failed — old containers are still running, nothing changed"
+              exit 1
+            fi
 
-            echo "── Restarting containers ──"
+            echo "── Running migrations (using new image, without stopping live containers) ──"
+            if ! docker compose -f docker-compose.prod.yml run --rm backend \
+              php artisan migrate --force --no-interaction; then
+              echo "ERROR: Migrations failed — rolling back images, nothing restarted"
+              docker tag crm_backend:rollback crm_backend:latest 2>/dev/null || true
+              docker tag crm_frontend:rollback crm_frontend:latest 2>/dev/null || true
+              exit 1
+            fi
+
+            echo "── Restarting containers with new images ──"
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            echo "── Clearing caches ──"
-            docker compose -f docker-compose.prod.yml exec -T backend \
-              php artisan config:cache
-            docker compose -f docker-compose.prod.yml exec -T backend \
-              php artisan route:cache
-            docker compose -f docker-compose.prod.yml exec -T backend \
-              php artisan view:cache
+            echo "── Waiting for containers to stabilise ──"
+            sleep 10
 
-            echo "── Deploy complete ✅ ──"
+            echo "── Health check ──"
+            BACKEND_STATUS=$(docker inspect --format='{{.State.Status}}' crm_backend_prod 2>/dev/null || echo "missing")
+            FRONTEND_STATUS=$(docker inspect --format='{{.State.Status}}' crm_frontend_prod 2>/dev/null || echo "missing")
+
+            if [ "$BACKEND_STATUS" != "running" ] || [ "$FRONTEND_STATUS" != "running" ]; then
+              echo "ERROR: Containers failed to start (backend=$BACKEND_STATUS frontend=$FRONTEND_STATUS)"
+              echo "── Rolling back to previous images ──"
+              docker tag crm_backend:rollback crm_backend:latest 2>/dev/null || true
+              docker tag crm_frontend:rollback crm_frontend:latest 2>/dev/null || true
+              docker compose -f docker-compose.prod.yml up -d --remove-orphans
+              exit 1
+            fi
+
+            echo "── Deploy complete ✅ (backend=$BACKEND_STATUS frontend=$FRONTEND_STATUS) ──"

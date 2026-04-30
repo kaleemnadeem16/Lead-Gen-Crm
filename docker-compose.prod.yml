@@ -1,23 +1,8 @@
 services:
 
-  # ── Redis 7 (local to this VM) ────────────────────────────────────────────────
-  # PostgreSQL lives on dbvm (10.0.1.88) — no local postgres container needed
-  redis:
-    image: redis:7-bookworm
-    container_name: crm_redis_prod
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - crm_redis_data:/data
-    networks:
-      - crm_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ── Laravel API ───────────────────────────────────────────────────────────────
+  # Redis lives on dbvm (10.0.1.88) — set REDIS_HOST=10.0.1.88 in backend/.env
+  # PostgreSQL lives on dbvm (10.0.1.88) — set DB_HOST=10.0.1.88 in backend/.env
   backend:
     build:
       context: ./backend
@@ -27,9 +12,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
-    depends_on:
-      redis:
-        condition: service_healthy
     networks:
       - crm_network
       - proxy-net
@@ -56,9 +38,6 @@ services:
     command: php artisan horizon
     env_file:
       - ./backend/.env
-    depends_on:
-      redis:
-        condition: service_healthy
     networks:
       - crm_network
 
@@ -100,14 +79,11 @@ services:
       - traefik.http.routers.crm-frontend-http.rule=Host(`crm.x1techs.com`)
       - traefik.http.routers.crm-frontend-http.entrypoints=web
       - traefik.http.routers.crm-frontend-http.middlewares=crm-redirect-https
-      # Redirect middleware (defined once, reused by both services)
+      # Redirect middleware (defined once, shared by both services)
       - traefik.http.middlewares.crm-redirect-https.redirectscheme.scheme=https
       - traefik.http.middlewares.crm-redirect-https.redirectscheme.permanent=true
       # Service port
       - traefik.http.services.crm-frontend.loadbalancer.server.port=80
-
-volumes:
-  crm_redis_data:
 
 networks:
   crm_network:
