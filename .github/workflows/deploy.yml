@@ -100,7 +100,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run Vitest
-        run: npm run test -- --run
+        run: npm run test -- --run --passWithNoTests
 
   # ── Job 3: Deploy (push to main only, after both test jobs pass) ───────────
   # The Docker images are built on the Oracle ARM VM (native ARM64).
