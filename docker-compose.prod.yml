@@ -1,0 +1,92 @@
+services:
+
+  # ── Laravel API ───────────────────────────────────────────────────────────────
+  # Redis lives on dbvm (10.0.1.88) — set REDIS_HOST=10.0.1.88 in backend/.env
+  # PostgreSQL lives on dbvm (10.0.1.88) — set DB_HOST=10.0.1.88 in backend/.env
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    image: crm_backend:latest
+    container_name: crm_backend_prod
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    networks:
+      - crm_network
+      - proxy-net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy-net
+      # HTTPS router
+      - traefik.http.routers.crm-backend.rule=Host(`api-crm.x1techs.com`)
+      - traefik.http.routers.crm-backend.entrypoints=websecure
+      - traefik.http.routers.crm-backend.tls=true
+      - traefik.http.routers.crm-backend.tls.certresolver=letsencrypt
+      # HTTP router -> redirect to HTTPS
+      - traefik.http.routers.crm-backend-http.rule=Host(`api-crm.x1techs.com`)
+      - traefik.http.routers.crm-backend-http.entrypoints=web
+      - traefik.http.routers.crm-backend-http.middlewares=crm-redirect-https
+      # Service port
+      - traefik.http.services.crm-backend.loadbalancer.server.port=8000
+
+  # ── Horizon (queue worker) ────────────────────────────────────────────────────
+  horizon:
+    image: crm_backend:latest
+    container_name: crm_horizon_prod
+    restart: unless-stopped
+    command: php artisan horizon
+    env_file:
+      - ./backend/.env
+    networks:
+      - crm_network
+
+  # ── Laravel Scheduler ─────────────────────────────────────────────────────────
+  scheduler:
+    image: crm_backend:latest
+    container_name: crm_scheduler_prod
+    restart: unless-stopped
+    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+    networks:
+      - crm_network
+
+  # ── React Frontend (Nginx static) ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_BASE_URL=https://api-crm.x1techs.com/api/v1
+        - VITE_APP_NAME=X1Techs CRM
+    image: crm_frontend:latest
+    container_name: crm_frontend_prod
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy-net
+      # HTTPS router
+      - traefik.http.routers.crm-frontend.rule=Host(`crm.x1techs.com`)
+      - traefik.http.routers.crm-frontend.entrypoints=websecure
+      - traefik.http.routers.crm-frontend.tls=true
+      - traefik.http.routers.crm-frontend.tls.certresolver=letsencrypt
+      # HTTP router -> redirect to HTTPS
+      - traefik.http.routers.crm-frontend-http.rule=Host(`crm.x1techs.com`)
+      - traefik.http.routers.crm-frontend-http.entrypoints=web
+      - traefik.http.routers.crm-frontend-http.middlewares=crm-redirect-https
+      # Redirect middleware (defined once, shared by both services)
+      - traefik.http.middlewares.crm-redirect-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.crm-redirect-https.redirectscheme.permanent=true
+      # Service port
+      - traefik.http.services.crm-frontend.loadbalancer.server.port=80
+
+networks:
+  crm_network:
+    driver: bridge
+  proxy-net:
+    external: true

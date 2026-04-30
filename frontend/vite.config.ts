@@ -18,5 +18,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    watch: {
+      // Required for Docker on Windows — Windows filesystem doesn't emit native FS events
+      usePolling: true,
+      interval: 1000,
+    },
   },
 })

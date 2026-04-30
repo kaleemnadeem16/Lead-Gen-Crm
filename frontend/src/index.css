@@ -2,19 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Light mode (default) ─────────────────────────────────────────────────── */
 :root {
+  --bg-base:     #ffffff;
+  --bg-surface:  #f8f8f8;
+  --bg-elevated: #efefef;
+  --border:      #e2e2e2;
+  --fg-1:        #0a0a0a;
+  --fg-2:        #5c5c5c;
+  --fg-3:        #a0a0a0;
+  color-scheme: light;
+}
+
+/* ── Dark mode ────────────────────────────────────────────────────────────── */
+.dark {
+  --bg-base:     #0a0a0a;
+  --bg-surface:  #141414;
+  --bg-elevated: #1e1e1e;
+  --border:      #2a2a2a;
+  --fg-1:        #f5f5f5;
+  --fg-2:        #a0a0a0;
+  --fg-3:        #606060;
   color-scheme: dark;
 }
 
-body {
+/* ── Base styles ─────────────────────────────────────────────────────────── */
+html, body {
   margin: 0;
-  background: #0f1117;
-  color: #f3f4f6;
+  background-color: var(--bg-base);
+  color: var(--fg-1);
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
+
+/* ── Scrollbar (dark mode) ─────────────────────────────────────────────── */
+.dark ::-webkit-scrollbar        { width: 6px; height: 6px; }
+.dark ::-webkit-scrollbar-track  { background: var(--bg-surface); }
+.dark ::-webkit-scrollbar-thumb  { background: var(--bg-elevated); border-radius: 3px; }
+
+/* ── Scrollbar (light mode) ────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 3px; }

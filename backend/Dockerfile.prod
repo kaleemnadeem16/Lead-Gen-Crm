@@ -1,0 +1,29 @@
+FROM php:8.4-cli-bookworm AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev libzip-dev unzip git libpcre3-dev \
+    && docker-php-ext-install pdo pdo_pgsql zip bcmath opcache pcntl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Redis extension for queue/session
+RUN pecl install redis && docker-php-ext-enable redis
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+COPY . .
+RUN composer run-script post-autoload-dump || true
+
+# .env is excluded by .dockerignore — config/route/view caches are built at
+# container startup (docker-entrypoint.sh) so they pick up runtime env vars.
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
