@@ -18,9 +18,12 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --no-script
 COPY . .
 RUN composer run-script post-autoload-dump || true
 
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# .env is excluded by .dockerignore — config/route/view caches are built at
+# container startup (docker-entrypoint.sh) so they pick up runtime env vars.
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
